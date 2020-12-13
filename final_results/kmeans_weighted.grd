@@ -1,0 +1,26 @@
+[general]
+creator=R package 'raster'
+created=2020-12-11 16:24:16
+[georeference]
+nrows=556
+ncols=377
+xmin=325209
+ymin=4395423
+xmax=336519
+ymax=4412103
+projection=+proj=utm +zone=11 +datum=WGS84 +units=m +no_defs
+[data]
+datatype=FLT4S
+byteorder=little
+nbands=1
+bandorder=BIL
+categorical=FALSE
+minvalue=-1
+maxvalue=1
+nodatavalue=-3.4e+38
+[legend]
+legendtype=
+values=
+color=
+[description]
+layername=LST_prob
