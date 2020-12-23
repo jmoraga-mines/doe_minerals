@@ -1,4 +1,5 @@
-source('DOE_Utilities.R')
+# Enter the source of the doe_utilities directories
+source('LST/doe_Utilities.R')
 
 #### temperature
 kmeans_tmp <- function(pt_lst_16, img_name, n_clusters=5, plot_image = FALSE) {
@@ -58,7 +59,8 @@ kmeans_dst <- function(pt_lst_16, img_name, n_clusters=5, plot_image = FALSE) {
 
 # Read all Landsat-8 LST files from data directory
 # data_directory = "F:/Geothermal Energy Project/Data/LST/BradyandDesert/Landsat" 
-data_directory = "F:/Geothermal Energy Project/Data/LST/BradyandDesert/Landsat2/ST" 
+# data_directory = "F:/Geothermal Energy Project/Data/LST/BradyandDesert/Landsat2/ST" 
+data_directory = "C:/Users/ayaz_a/Desktop/R/data/LST/." 
 lst_file_names = list.files(data_directory, pattern="([:alnum:]|_)*_ST[.]tif", recursive=TRUE, full.names = TRUE)
 lst_file_names = lst_file_names[grep("tif$", lst_file_names)]
 lst_list <- vector(mode = "list", length = 0)
@@ -77,6 +79,7 @@ for (a_file in lst_file_names){
   names(r) <- raster_name 
   lst_list[raster_name] <- r
 }
+
 all_lst <- stack(unlist(lst_list))
 names(all_lst)
 # raster_names = paste("LST", as.Date(substr(basename(lst_file_names), 16, 23), "%Y%m%d"), sep="_")
@@ -91,7 +94,7 @@ all_lst <- projectRaster(all_lst, extent_hymap_lst, res = res(all_lst))
 
 
 ########## START # Doing the same but for QA files ###
-data_directory = "F:/Geothermal Energy Project/Data/LST/BradyandDesert/Landsat2/STQA" 
+# data_directory = "F:/Geothermal Energy Project/Data/LST/BradyandDesert/Landsat2/STQA" 
 lst_file_names = list.files(data_directory, pattern="([:alnum:]|_)*_PIXELQA[.]tif", recursive=TRUE, full.names = TRUE)
 lst_file_names = lst_file_names[grep("tif$", lst_file_names)]
 lst_list <- vector(mode = "list", length = 0)
@@ -112,7 +115,8 @@ for (a_file in lst_file_names){
 }
 
 qa_stack <- stack(unlist(lst_list))
-
+# doe_writeRaster(qa_stack, 'final_results/all_tifs')
+# all_lst <- 'final_results/all_tifs.gri'
 ########## END # Doing the same but for QA files ###
 
 clean_stack <- stack(all_lst)
