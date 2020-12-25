@@ -5,6 +5,7 @@ if (!require("pacman")) {
 pacman::p_load(raster, rgdal, sp)
 pacman::p_load(autothresholdr)
 
+source("LST/doe_utilities.R")
 
 ### START # Defining geographical extent from Areas of Interest ---------------
 ###
