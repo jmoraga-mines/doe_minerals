@@ -53,7 +53,7 @@ if (!require("pacman")) {
   install.packages("pacman")
   require("pacman")
 }
-pacman::p_load(dplyr, ggplot)
+pacman::p_load(dplyr, raster, ggplot2)
 
 #' Read a SARPROZ csv file, cleaning up and standardizing to a data frame
 #'
@@ -80,15 +80,15 @@ read_sarproz <- function(x,
       crs = crs("+init=epsg:32611")
     )
   }
-  x_extent <- extent(e)
+  x_extent <- extent(projectExtent(e, "+proj=longlat +datum=WGS84"))
   
   psinsar_csv <-
     read.csv(x)
   cropped_psi <-
-    psinsar_csv %>% filter(X >= x_extent@xmin,
-                           X <= x_extent@xmax,
-                           Y >= x_extent@ymin,
-                           Y <= x_extent@ymax)
+    psinsar_csv %>% filter(LON >= x_extent@xmin,
+                           LON <= x_extent@xmax,
+                           LAT >= x_extent@ymin,
+                           LAT <= x_extent@ymax)
   nrow(cropped_psi)
   nrow(psinsar_csv)
   rm(psinsar_csv)
@@ -106,16 +106,17 @@ read_sarproz <- function(x,
   rm(longlat_df)
   names(reproject_df) <- c("x", "y")
   psi_headers <- names(cropped_psi)
+  # old filter was: "x[0-9]+([:.:][0-9]+)+$"
   date_headers <-
-    psi_headers[grepl("x[0-9]+([:.:][0-9]+)+$", psi_headers)]
+    psi_headers[grepl("x[0-9]{8}$", psi_headers)]
   date_list <-
-    as.Date(gsub("x", "20", gsub("[:.:]", "/", date_headers)))
+    as.Date(gsub("x", "", gsub("[:.:]", "/", date_headers)), "%Y%m%d")
   psi_valid_date_list <-
     date_headers[(as.Date(date_list) >= as.Date("2017-12-20"))]
   psi_valid_date_list
   psi_date_values <- cropped_psi[psi_valid_date_list]
   non_date_headers <-
-    psi_headers[!grepl("x[0-9]+([:.:][0-9]+)+$", psi_headers)]
+    psi_headers[!grepl("x[0-9]+([:.:][0-9]+)*$", psi_headers)]
   psi_std_headers <-
     c(
       "lat",
@@ -136,11 +137,10 @@ read_sarproz <- function(x,
     )
   # Default headers: ("lat", "lon", "coher", "vel")
   cropped_psi <- cropped_psi[psi_old_headers]
-  print(names(cropped_psi))
-  print("Renaming")
+  # print(paste(names(cropped_psi), collapse = ","))
   # Reaname headers
   names(cropped_psi) <- psi_new_headers
-  print(names(cropped_psi))
+  print(paste("Renaming headers to:", paste0(names(cropped_psi), collapse = ", ")))
   # Columnwise sweep (subtract) the first column values
   psi_date_values <-
     sweep(psi_date_values, 1, STATS = psi_date_values[, 1])
@@ -149,25 +149,26 @@ read_sarproz <- function(x,
   return(cropped_psi)
 }
 
+### START - Read SARPROZ csv file and filter. Keep time series ------
 
-hymap_psi <- read_sarproz("../data/SARPROZ/Brady_72img_TS_7.csv")
-
+brady_psi <- read_sarproz("../data/SARPROZ/Brady_72img_TS_7.csv")
 
 f <-
-  write.csv(hymap_psi, "final_results/HyMapPSInSAR.csv", row.names = FALSE)
-rm(f, hymap_psi)
-hymap_psi <- read.csv("final_results/HyMapPSInSAR.csv")
-n_col <- ncol(hymap_psi)
+  write.csv(brady_psi, "final_results/HyMapPSInSAR.csv", row.names = FALSE)
+rm(f, brady_psi)
+### END - Output is new file with filtered data -----
 
-csv_headers <- names(hymap_psi)
-psi_data <- hymap_psi[, 6:ncol(hymap_psi)]
 
-date_headers <- psi_data[grepl("x[0-9]+([:.:][0-9]+)+$", psi_data)]
+
+### Recalculate Velocities, linear models are built from scatch -----
+brady_psi <- read.csv("final_results/HyMapPSInSAR.csv")
+n_col <- ncol(brady_psi)
+csv_headers <- names(brady_psi)
+date_headers <- csv_headers[grepl("x[0-9]{8}$", csv_headers)]
+psi_data <- brady_psi[, date_headers]
 psi_headers <- names(psi_data)
-date_headers <-
-  psi_headers[grepl("x[0-9]+([:.:][0-9]+)+$", psi_headers)]
 date_list <-
-  as.Date(gsub("x", "20", gsub("[:.:]", "/", date_headers)))
+  as.Date(date_headers, "x%Y%m%d")
 date_df <- data.frame(date_list)
 names(date_df) <- "date"
 y <- data.frame(t(psi_data))
@@ -190,9 +191,9 @@ point_label <- names(y)[point_to_plot]
 
 the_model <- lm(get(point_label) ~ date,
                data = my_model_df[c("date", point_label)])
-print(paste("Slope:", coef(the_model)[2] * 365, "mm per year"))
-print("StdError:")
-print(sqrt(diag(vcov(the_model))))
+cat(paste("Slope:", coef(the_model)[2] * 365, "mm per year"))
+cat("StdError:")
+print( sqrt(diag(vcov(the_model))))
 if (FALSE) summary(the_model)
 df_model_dates <- as.Date(date_df$date, "%Y-%m-%d")
 g_plot <- ggplot(data = my_model_df,
@@ -232,7 +233,7 @@ model_store <- as.data.frame(t(model_store))
 names(model_store) <- "velocity"
 model_store[1:10, 1]
 
-calculated_velocity <- cbind(hymap_psi[c("x", "y")], model_store)
+calculated_velocity <- cbind(brady_psi[c("x", "y")], model_store)
 f <-
   write.csv(calculated_velocity,
             "final_results/Velocity_171222_191224.csv",
@@ -240,9 +241,13 @@ f <-
 rm(f)
 
 
-d <- hymap_psi
+d <- brady_psi
 d["velocity"] <- model_store
 d["lat"] <- NULL
 d["lon"] <- NULL
 f <- write.csv(d, "final_results/PSInSAR_for_SOM.csv", row.names = FALSE)
-rm(f)
+rm(f, brady_psi, g_plot, my_model_df, y, psi_data, calculated_velocity)
+rm(model_store, d)
+psi_data_som <- read.csv("final_results/PSInSAR_for_SOM.csv")
+#### END -- New velocities and Linear models saved ------------------
+
