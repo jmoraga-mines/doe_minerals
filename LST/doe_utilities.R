@@ -5,7 +5,7 @@ if (!require("pacman")) {
   install.packages("pacman")
   require("pacman")
 }
-p_load(raster, rgdal)
+pacman::p_load(raster, rgdal)
 
 # Landsat-8 LST files use Albers projection in meters
 # Resolution is 30 by 30 mts
