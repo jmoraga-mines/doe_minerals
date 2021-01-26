@@ -34,7 +34,7 @@ doe_write_raster <-
            format = "raster",
            overwrite = TRUE,
            bandorder = "BSQ") {
-    if (tools::file_ext("filename.grd") != "grd") {
+    if (tools::file_ext(filename) != "grd") {
       filename <- tools::file_path_sans_ext(filename)
       filename <- paste(filename, ".grd", sep = "")
     }
