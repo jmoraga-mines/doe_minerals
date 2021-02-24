@@ -16,7 +16,6 @@ For use with the AI
 “-l tmp/doe_19x3d200b.l”
 
 This will contain the network architecture and all weights
-
 (-m) Model file output directory
 “-m tmp/doe19x3d200b.h5” 
 
