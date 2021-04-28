@@ -28,6 +28,23 @@ extent_hymap <-
     crs = "+init=epsg:32611"
   )
 
+#' Save a raster object to a standard format (GRD) and creates
+#' an ENVI-style header files to preserve raster layer(s) name(s).
+#' This is a wrapper for the raster::writeRaster function
+#'
+#' @param x Raster. A raster or stack object
+#' @param filename Character. A file name (with no extension or .grd extension)
+#' @param format Character. a format from the raster::writeFormats list, default
+#' is "raster"
+#' @param overwrite Boolean. either TRUE or FALSE
+#' @param bandorder Character. 'BIL', 'BIP', or 'BSQ'. For 'native' file formats only.
+#'
+#' @return A file handle to the written file
+#'
+#' @examples
+#' doe_write_raster(raster01, "my_doe_file")
+#' doe_write_raster(raster01, "my_doe_file", overwrite = FALSE)
+#' 
 doe_write_raster <-
   function(x,
            filename,
@@ -50,6 +67,16 @@ doe_write_raster <-
   }
 
 
+#' Transforms a 2 column table of coordinates into a Spatial Points object
+#'
+#' @param coord Array. 2 column table with (x, y) coordinates for each point
+#' @param sp_data Array. 1-dimensional array with the data for each point
+#' @param projection CRS. A coordinate system for the projection. Uses UTM, Zone 11N projection by default
+#'
+#' @return A SpatialPoints object
+#'
+#' @examples 
+#' sp01 <- coords2spatial(coordinates, values, crs("+init=epsg:4326")) # coordinates in lat/long format
 coords2spatial <-
   function(coord,
            sp_data,
@@ -63,6 +90,16 @@ coords2spatial <-
     return(d0)
   }
 
+#' Transforms a coordinates array to a spatial data frame object
+#'
+#' @param coord Array. 2 column table with (x, y) coordinates for each point
+#' @param sp_data Array. 1-dimensional array with the data for each point
+#' @param projection CRS. A coordinate system for the projection. Uses UTM, Zone 11N projection by default
+#' 
+#' @return SpatialPointsDataFrame object
+#'
+#' @examples
+#' spdf01 <- coords2spatialdf(coordinates, values, crs("+init=epsg:4326")) # coordinates in lat/long format
 coords2spatialdf <-
   function(coord,
            sp_data,
@@ -72,6 +109,14 @@ coords2spatialdf <-
     return(d0)
   }
 
+#' Clustering/summary function
+#'
+#' @param df_data DataFrame. An input data frame
+#'
+#' @return DataFrame. A data frame containing basic statistics for each column of the df_data data frame
+#'
+#' @examples
+#' df_cluster <- cluster_fun(my_dataframe)
 cluster_fun <- function(df_data) {
   clusters <- data.frame(matrix(ncol = 6, nrow = 0))
   colnames(clusters) <-
@@ -88,10 +133,20 @@ cluster_fun <- function(df_data) {
   return(clusters)
 }
 
-df_plot <- function(df_img, save_file = FALSE) {
+#' Plot a data frame based on x & y coordinates
+#'
+#' @param df_img DataFrame. A data frame where the first 2 columns are (x, y) coordinates
+#' @param save_file Boolean or Character. Whether a GeoTiff file must be created, if not FALSE, it must contain the save_file name
+#' @param projection CRS. A coordinate system for the projection. Uses UTM, Zone 11N projection by default
+#'
+#' @return A plottable image (raster)
+#'
+#' @examples
+df_plot <- function(df_img, save_file = FALSE,
+                    projection = crs("+init=epsg:32611")) {
   plt_img <- df_img
   coordinates(plt_img) <- ~ x + y
-  proj4string(plt_img)  <- "+init=epsg:32611"
+  proj4string(plt_img)  <- projection
   gridded(plt_img) <- TRUE
   plot(plt_img)
   if (save_file != FALSE) {
@@ -105,10 +160,29 @@ df_plot <- function(df_img, save_file = FALSE) {
   return(plt_img)
 }
 
+#' Extract the columns x and y, and img_name from a data frame using a mask and class
+#'
+#' @param a_df_lst List of DataFrames.A data frame list 
+#' @param a_df_mask A mask to select items from the data frame list
+#' @param img_name Characters. Name of the image (column name)
+#' @param a_class Character. A class
+#'
+#' @return
+#'
+#' @examples
 get_subset <- function(a_df_lst, a_df_mask, img_name, a_class) {
   return(a_df_lst[(a_df_mask[img_name] == a_class), c("x", "y", img_name)])
 }
 
+#' Plots and saves a K-Means clustering plot in PNG format
+#'
+#' @param a_raster Raster. Raster object to print
+#' @param a_name Characters. The name of the file to create, or FALSE to not save a file
+#'
+#' @return None
+#'
+#' @examples
+#' save_plot(my_raster, "file_name")
 save_plot <- function(a_raster, a_name) {
   png(paste0(a_name, ".png"), width = 600, height = 800)
   print(spplot(
