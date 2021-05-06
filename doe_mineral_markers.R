@@ -2,8 +2,9 @@ if (!require("pacman")) {
   installed.packages("pacman")
   library("pacman")
 }
-pacman::p_load(raster, rgdal, sp)
+pacman::p_load(raster, rgdal, sp, rgeos)
 pacman::p_load(autothresholdr)
+pacman::p_load(latticeExtra)
 
 source("LST/doe_utilities.R")
 
@@ -22,6 +23,8 @@ extent_tall_brady <- raster::raster(
   crs = "+init=epsg:32611"
 )
 
+poly_extent_brady <- as(extent(extent_tall_brady), 'SpatialPolygons')
+crs(poly_extent_brady) <- crs(extent_tall_brady)
 
 extent_desert <- raster::raster(
   xmn = 330955.3,
@@ -31,6 +34,9 @@ extent_desert <- raster::raster(
   res = c(3, 3),
   crs = "+init=epsg:32611"
 )
+
+poly_extent_desert <- as(extent(extent_desert), 'SpatialPolygons')
+crs(poly_extent_desert) <- crs(extent_desert)
 
 extent_hymap <- raster::raster(
   xmn = 325209,
@@ -65,7 +71,7 @@ doe_write_raster <- function(x,
 }
 
 
-test_all_thresholds <- function(x) {
+test_all_thresholds <- function(x, ignore_black=TRUE) {
   x <- as.matrix(x) * 1000
   mode(x) <- "integer"
   the_good_methods <- c(
@@ -79,10 +85,13 @@ test_all_thresholds <- function(x) {
   )
   r <- vector(mode = "list", length = 0)
   for (th_method in the_good_methods) {
-    b_t <- autothresholdr::auto_thresh(x,
-      method = th_method,
-      ignore_black = TRUE,
-      ignore_na = TRUE
+    b_t <- tryCatch(
+      {
+        autothresholdr::auto_thresh(b, method = th_method,
+                                    ignore_black = ignore_black,
+                                    ignore_na = TRUE)
+      }, error=function(cond){return(-1)}, 
+      warning=function(cond){return(-1)}
     )
     r[th_method] <- (as.numeric(b_t) / 1000.0)
     print(paste(
@@ -91,6 +100,38 @@ test_all_thresholds <- function(x) {
       "; threshold = ",
       as.numeric(b_t) / 1000.0
     ))
+  }
+  return(r)
+}
+
+
+select_largest_threshold <- function(x, ignore_black=TRUE) {
+  x <- as.matrix(x) * 1000
+  mode(x) <- "integer"
+  the_good_methods <- c(
+    "IJDefault",
+    "Intermodes",
+    "IsoData",
+    "Minimum",
+    "Moments",
+    "Otsu",
+    "RenyiEntropy"
+  )
+  r <- list("method"="None", "th"=0)
+  for (th_method in the_good_methods) {
+    b_t <- tryCatch(
+      {
+        autothresholdr::auto_thresh(b, method = th_method,
+                                    ignore_black = ignore_black,
+                                    ignore_na = TRUE)
+      }, error=function(cond){return(-1)}, 
+      warning=function(cond){return(-1)}
+    )
+    test_th <- (as.numeric(b_t)/ 1000.0)
+    if(test_th > r$th) {
+      r$th <- test_th
+      r$method <- th_method
+    }
   }
   return(r)
 }
@@ -113,7 +154,7 @@ plot_threshold <- function(x,
   return(top_x)
 }
 
-minerals_directory <- "../../HyMapTargetDetectionFull"
+minerals_directory <- "../../doe_test/HyMapTargetDetectionFull"
 sam_file <- file.path(minerals_directory, "HyMap_full_sam_rule")
 sam <- raster::stack(sam_file)
 # All thresholding methods: "OpalizedTuff_CU00_15E", "KrattOpal",
@@ -137,7 +178,7 @@ center_point <- 1.0
 min_limit <- center_point - strict
 max_limit <- center_point + strict
 
-filtered_sam <- raster::stack(sam_file)
+brady_sam <- raster::stack(sam_file)
 
 sam_filter <- function(x, center_point, threshold, e = NULL) {
   threshold <- abs(threshold)
@@ -152,21 +193,42 @@ sam_filter <- function(x, center_point, threshold, e = NULL) {
   return(x_crop)
 }
 
+#' Normalizes a SAM raster to a number between 0-1, where 1 is better
+#' The results of the Spectral Angle Mapper (SAM) correspond to
+#' angles in radians, where a low number indicates closeness between
+#' the spectrum tested and the pixel analyzed.
+#' To compare against other methods, this function converts these 
+#' low numbers (positive or negative) into values in the range 0-1
+#' where a 1 is perfect match and 0 is no match.
+#' 
+#' @param x Raster. A raster with the results of the SAM analysis
+#'
+#' @return Raster. A normalized raster
+#'
+#' @examples
+#' n_sam <- sam_normalize(sam_raster)
+#' 
 sam_normalize <- function(x) {
   x <- abs(x - 1)
   x <- 1 - x
   return(x)
 }
 
+
 raster_sum <- function(x) {
   idx <- c(1:nlayers(x)) * 0 + 1
-  r <- raster::stackApply(x,
-    indices = idx,
-    fun = sum,
-    na.rm = TRUE
-  )
+  r <- raster::stackApply(x, indices = idx, fun = sum,na.rm = TRUE)
   return(r)
 }
+
+raster_euclidean_collapse <- function(x) {
+  x <- x*x
+  idx <- rep(1, nlayers(x))
+  r <- raster::stackApply(x, indices = idx, fun = sum,na.rm = TRUE)
+  r <- sqrt(r)
+  return(r)
+}
+
 
 stack2matrix <- function(x, layer_name) {
   b <- as.matrix(x[[layer_name]])
@@ -176,13 +238,12 @@ stack2matrix <- function(x, layer_name) {
 
 
 low_normalize <- function(x) {
-  x[x == 0] <- NA
+  # x[x == 0] <- NA
   x <- abs(x)
   return(x)
 }
 
-
-brady_sam <- filtered_sam
+names(brady_sam) <- band_names
 brady_sam <- sam_normalize(brady_sam)
 brady_relaxed <- sam_filter(brady_sam, center_point, relaxed)
 brady_moderate <- sam_filter(brady_sam, center_point, moderate)
@@ -199,34 +260,82 @@ f1 <- doe_write_raster(
   brady_relaxed,
   file.path(minerals_directory, "SAM_relaxed")
 )
+f1 <- doe_write_raster(
+  brady_moderate,
+  file.path(minerals_directory, "SAM_moderate")
+)
+f1 <- doe_write_raster(
+  brady_strict,
+  file.path(minerals_directory, "SAM_strict")
+)
 rm(f1)
-dir.create("results/SAM", recursive = TRUE, mode = "0775")
 
+# Create results directory if it does not exist
+if (!dir.exists("results/SAM"))
+  dir.create("results/SAM", recursive = TRUE, mode = "0775")
+
+# Save shapefiles with boudaries for both sites
+raster::shapefile(poly_extent_brady, 
+                  filename="results/extent_brady_frame.shp", 
+                  overwrite=TRUE)
+raster::shapefile(poly_extent_desert, 
+                  filename="results/extent_desert_frame.shp", 
+                  overwrite=TRUE)
+
+# Collapse multiple layers into one by summing
 brady_minerals_s <- raster_sum(brady_strict)
 brady_minerals_m <- raster_sum(brady_moderate)
 brady_minerals_r <- raster_sum(brady_relaxed)
+brady_minerals_s2 <- raster_euclidean_collapse(brady_strict)
+brady_minerals_m2 <- raster_euclidean_collapse(brady_moderate)
+brady_minerals_r2 <- raster_euclidean_collapse(brady_relaxed)
+raster::spplot(brady_minerals_r2, main = "Brady SAM Euclidean Collapse (relaxed)", 
+               col.regions=rev(heat.colors(100))) + 
+  latticeExtra::layer(sp.polygons(poly_extent_brady, lwd=1, col = "blue")) + 
+  latticeExtra::layer(sp.polygons(poly_extent_desert, lwd=1, col = "blue"))
+
 
 raster::spplot(brady_minerals_s, main = "Brady SAM Summary (strict)")
 raster::spplot(brady_minerals_m, main = "Brady SAM Summary (moderate)")
-raster::spplot(brady_minerals_r, main = "Brady SAM Summary (relaxed)")
+raster::spplot(brady_minerals_r, main = "Brady SAM Summary (relaxed)", 
+               col.regions=rev(heat.colors(100))) + 
+  latticeExtra::layer(sp.polygons(poly_extent_brady, lwd=1, col = "blue")) + 
+  latticeExtra::layer(sp.polygons(poly_extent_desert, lwd=1, col = "blue"))
 
 limit <- raster::cellStats(brady_minerals_r, max)
 brady_minerals_sum <- brady_minerals_r / limit
-raster::spplot(brady_minerals_sum, main = "Brady SAM Relaxed (normalized)")
+raster::spplot(brady_minerals_sum, 
+               main = "Brady SAM Relaxed (normalized)", 
+               col.regions=rev(heat.colors(100))) + 
+  latticeExtra::layer(sp.polygons(poly_extent_brady, lwd=1, col = "blue")) + 
+  latticeExtra::layer(sp.polygons(poly_extent_desert, lwd=1, col = "blue"))
+
+limit <- raster::cellStats(brady_minerals_r2, max)
+brady_minerals_euclidean <- brady_minerals_r2 / limit
+raster::spplot(brady_minerals_euclidean, 
+               main = "Brady SAM Euclidean (relaxed, normalized)", 
+               col.regions=rev(heat.colors(100))) + 
+  latticeExtra::layer(sp.polygons(poly_extent_brady, lwd=1, col = "blue")) + 
+  latticeExtra::layer(sp.polygons(poly_extent_desert, lwd=1, col = "blue"))
 
 f1 <- doe_write_raster(brady_minerals_sum, "results/SAM/SAM_Mineral_relaxed")
+f1 <- doe_write_raster(brady_minerals_euclidean, "results/SAM/SAM_Mineral_euclidean_relaxed")
 rm(f1)
 
-brady_sam <- raster::crop(brady_minerals_sum, extent_tall_brady)
-desert_sam <- raster::crop(brady_minerals_sum, extent_desert)
+brady_sam <- raster::crop(brady_minerals_euclidean, extent_tall_brady)
+spplot(brady_sam, main="Brady SAM complete (relaxed)", 
+       col.regions=rev(heat.colors(100)))
+desert_sam <- raster::crop(brady_minerals_euclidean, extent_desert)
+spplot(desert_sam, main="Desert Peak SAM complete (relaxed)", 
+       col.regions=rev(heat.colors(100)))
 
 top_sam <- raster::brick(brady_sam)
 top_sam[top_sam < 0.4] <- NA
-spplot(top_sam, main = "SAM Brady Only")
+plot(top_sam, main = "SAM Brady Only", axes=TRUE)
 
 
 b <- as.matrix(brady_sam) * 1000
-b <- as.matrix(brady_minerals_sum) * 1000
+b <- as.matrix(brady_minerals_euclidean) * 1000
 mode(b) <- "integer"
 
 # The available methods are "IJDefault", "Huang", "Huang2", "Intermodes",
@@ -248,40 +357,20 @@ th_methods <- c(
   "Percentile",
   "RenyiEntropy",
   "Shanbhag",
-  "Triangle",
+  "Triangle", 
   "Yen"
 )
-th_good_methods <- c(
-  "IJDefault",
-  "Intermodes",
-  "IsoData",
-  "Minimum",
-  "Moments",
-  "Otsu",
-  "RenyiEntropy"
-)
 
-for (th_method in th_good_methods) {
-  b_t <-
-    autothresholdr::auto_thresh(b,
-      method = th_method,
-      ignore_black = TRUE,
-      ignore_na = TRUE
-    )
-  print(paste0(
-    "Method: ", th_method, "; threshold = ",
-    as.numeric(b_t) / 1000.0
-  ))
-}
-b_t <- autothresholdr::auto_thresh(b,
-  method = "Otsu",
-  ignore_black = TRUE,
-  ignore_na = TRUE
-)
-top_sam <- raster::brick(brady_sam)
-top_sam[top_sam < (as.numeric(b_t) / 1000.0)] <- NA
-raster::spplot(top_sam, main = paste0("SAM Brady Threshold (", th_method, ")"))
-
+threshold <- select_largest_threshold(b, ignore_black = TRUE)
+b_t <- threshold$th
+th_method <- threshold$method
+top_sam <- raster::crop(brady_minerals_euclidean, extent_tall_brady)
+top_sam[top_sam < b_t] <- 0
+raster::spplot(top_sam, main = paste0("SAM Brady Threshold (", th_method, ")"), 
+               col.regions=rev(heat.colors(100)))
+plot(top_sam, main = paste0("SAM Brady Threshold (", th_method, ")"), 
+     axes=TRUE,
+     col=rev(heat.colors(100)))
 rm(brady_relaxed, brady_moderate, brady_strict, brady_minerals)
 rm(brady_minerals_m, brady_minerals_r, brady_minerals_s)
 rm(sam, filtered_sam, b, brady_minerals_sum)
@@ -302,7 +391,7 @@ plot_threshold(ace_stack[["Chalcedony"]], 0.843, extent_tall_brady)
 
 #### Generic Function ####
 
-full_detection <- function(base_dir, file_name, band_names, e = NULL) {
+full_detection <- function(base_dir, file_name, band_names, e = NULL, is_sam = FALSE) {
   detection_file <- file.path(base_dir, file_name)
   print(paste0("Reading and nomalizing: ", detection_file))
   detection_stack <- low_normalize(stack(detection_file))
@@ -314,12 +403,12 @@ full_detection <- function(base_dir, file_name, band_names, e = NULL) {
   print("Checking thresholds for each layer")
   for (n in band_names) {
     print(paste0("Layer: ", n))
-    t <- test_all_thresholds(detection_stack[[n]])
-    plot_threshold(detection_stack[[n]], t$Otsu)
+    t <- select_largest_threshold(detection_stack[[n]])
+    plot_threshold(detection_stack[[n]], t$th)
   }
 }
 
-quick_detection <- function(base_dir, file_name, band_names, e = NULL) {
+otsu_detection <- function(base_dir, file_name, band_names, e = NULL) {
   detection_file <- file.path(base_dir, file_name)
   print(paste("Reading:", detection_file))
   detection_stack <- raster::stack(detection_file)
@@ -345,14 +434,14 @@ quick_detection <- function(base_dir, file_name, band_names, e = NULL) {
 b <- quick_detection(minerals_directory, "HyMap_full_cem", band_names)
 
 #################
-b_cem <- quick_detection(minerals_directory, "HyMap_full_cem", band_names)
+b_cem <- full_detection(minerals_directory, "HyMap_full_cem", band_names)
 doe_write_raster(b_cem, "results/Sum_cem")
-b_mf <- quick_detection(minerals_directory, "HyMap_full_mf", band_names)
+b_mf <- full_detection(minerals_directory, "HyMap_full_mf", band_names)
 doe_write_raster(b_mf, "results/Sum_mf")
-b_osp <- quick_detection(minerals_directory, "HyMap_full_osp", band_names)
+b_osp <- full_detection(minerals_directory, "HyMap_full_osp", band_names)
 doe_write_raster(b_osp, "results/Sum_osp")
 
-b_tcimf <- quick_detection(minerals_directory, "HyMap_full_tcimf", band_names)
+b_tcimf <- full_detection(minerals_directory, "HyMap_full_tcimf", band_names)
 doe_write_raster(b_tcimf, "results/Sum_tcimf")
 
 ###################
