@@ -274,7 +274,7 @@ rm(f1)
 if (!dir.exists("results/SAM"))
   dir.create("results/SAM", recursive = TRUE, mode = "0775")
 
-# Save shapefiles with boudaries for both sites
+# Save shapefiles with boundaries for both sites
 raster::shapefile(poly_extent_brady, 
                   filename="results/extent_brady_frame.shp", 
                   overwrite=TRUE)
