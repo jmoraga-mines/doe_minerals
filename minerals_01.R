@@ -67,6 +67,7 @@ rc[invalid_clumps]<-NA
 # Create results directory if it does not exist
 if (!dir.exists("results/SAM"))
   dir.create("results/SAM", recursive = TRUE, mode = "0775")
+dir.create("results/filtered", showWarnings = FALSE, recursive = TRUE, mode = "0775")
 
 cem_stack <- full_detection(base_dir = minerals_directory, 
                             file_name = "HyMap_full_cem",
@@ -74,7 +75,6 @@ cem_stack <- full_detection(base_dir = minerals_directory,
                             target_list = target_list,
                             e = extent_tall_brady,
                             is_sam = FALSE, ignore_black = FALSE)
-
 ace_stack <- full_detection(base_dir = minerals_directory, 
                             file_name = "HyMap_full_ace",
                             band_names = band_names,
@@ -110,13 +110,19 @@ tcimf_stack <- full_detection(base_dir = minerals_directory,
                             e = extent_tall_brady,
                             is_sam = FALSE, ignore_black = FALSE)
 
+f1 <- doe_write_raster(cem_stack, "results/filtered/cem_stack")
+f1 <- doe_write_raster(ace_stack, "results/filtered/ace_stack")
+f1 <- doe_write_raster(osp_stack, "results/filtered/osp_stack")
+f1 <- doe_write_raster(mf_stack, "results/filtered/mf_stack")
+f1 <- doe_write_raster(sam_stack, "results/filtered/sam_stack")
+f1 <- doe_write_raster(tcimf_stack, "results/filtered/tcimf_stack")
+rm(f1)
+
 names(cem_stack) <- band_names
 cem_stack <- cem_stack[[c("Chalcedony", "Kaolinite", "Gypsum",
                           "Epsomite")]]
 raster::setMinMax(cem_stack)
 cem_stack <- unit_normalization(get_stack)
 
-
-
-
 spplot(ace_stack)
+
