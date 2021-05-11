@@ -14,7 +14,7 @@ input_files <- c("HyMap_full_ace", "HyMap_full_cem", "HyMap_full_mf",
 all_stacks <- vector(mode="list", length = 0)
 for (file_name in input_files){
   s <- stack(file.path(minerals_directory, file_name))
-  s <- raster::crop(s, extent_desert)
+  # s <- raster::crop(s, extent_desert)
   names(s) <- band_names
   s <- s[[target_list]]
   n <- is.na(s)
@@ -25,6 +25,8 @@ for (file_name in input_files){
     s <- abs(s-1)
     s[s>1]  <- NA
     s <- 1-s
+  } else {
+    cat(paste0(file_name, " is not SAM\n"))
   }
   s_min <- raster::cellStats(s, min)
   s_max <- raster::cellStats(s, max)
@@ -40,7 +42,7 @@ for (file_name in input_files){
 # chalcedony <- calc(chalcedony, sum, na.rm = TRUE)
 # chalcedony[is.na(all_stacks[[5]][["Chalcedony"]])] <- NA
 # plot(chalcedony)
-
+cat("Collating minerals\n")
 minerals_stack <- stack()
 for (mineral_name in target_list){
   m <- stack()
@@ -50,18 +52,21 @@ for (mineral_name in target_list){
   names(m) <- mineral_name
   minerals_stack <- stack(minerals_stack, m)
 }
+cat("Plotting minerals\n")
 
-plot(minerals_stack)
+plot(minerals_stack, main="Mineral Maps before normalization")
 
 hydrothermal <- calc(minerals_stack, sum, na.rm = TRUE)
 names(hydrothermal) <- "Hydrothermal"
-plot(hydrothermal)
+
+plot(hydrothermal, main="Fusion of all available minerals")
 
 minerals_stack2 <- minerals_stack[[target_list2]]
 hydrothermal2 <- calc(minerals_stack2, sum, na.rm = TRUE)
 names(hydrothermal2) <- "Geothermal"
-plot(hydrothermal2)
+plot(hydrothermal2, main="Fusion of top hydrothermal minerals")
 
+cat("Finding thresholds\n")
 geo_m <- as.matrix(hydrothermal2)*1000
 mode(geo_m) <- "integer"
 geo<-autothresholdr::auto_thresh(geo_m, method = "Otsu",
@@ -86,7 +91,7 @@ geo2[geo2<as.numeric(geo2_th)] <- NA
 geo2 <- unit_normalization(geo2)
 plot(geo2, main="Geothermal alterations after normalization and thresholding", col=rev(heat.colors(100)))
 
-f1 <- doe_write_raster(geo2, "results/filtered/DesertPeak_Markers")
+f1 <- doe_write_raster(geo2, "results/filtered/BradyDesert_Markers")
 
 # ace_stack <- stack("results/filtered/ace_stack")
 # cem_stack <- stack("results/filtered/cem_stack")
