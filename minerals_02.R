@@ -11,6 +11,7 @@ target_list2 <- c("Chalcedony", "Kaolinite", "Gypsum",
 input_files <- c("HyMap_full_ace", "HyMap_full_cem", "HyMap_full_mf",
                  "HyMap_full_osp", "HyMap_full_sam_rule","HyMap_full_tcimf")
 
+### Read all files and apply min-max normalization
 all_stacks <- vector(mode="list", length = 0)
 for (file_name in input_files){
   s <- stack(file.path(minerals_directory, file_name))
@@ -20,7 +21,8 @@ for (file_name in input_files){
   n <- is.na(s)
   s[is.na(s)] <- 0
   s <- raster::setMinMax(s)
-  if(grepl("sam_rule", file_name, fixed = TRUE)){
+  #### if it's the output of the SAM algorithm, adjust results
+  if(grepl("_sam", file_name, fixed = TRUE)){
     cat(paste0(file_name, " is SAM\n"))
     s <- abs(s-1)
     s[s>1]  <- NA
@@ -28,6 +30,7 @@ for (file_name in input_files){
   } else {
     cat(paste0(file_name, " is not SAM\n"))
   }
+  ### Apply min-max normalization
   s_min <- raster::cellStats(s, min)
   s_max <- raster::cellStats(s, max)
   s <- (s-s_min)/s_max
@@ -91,8 +94,11 @@ geo2[geo2<as.numeric(geo2_th)] <- NA
 geo2 <- unit_normalization(geo2)
 plot(geo2, main="Geothermal alterations after normalization and thresholding", col=rev(heat.colors(100)))
 
-f1 <- doe_write_raster(geo2, "results/filtered/BradyDesert_Markers")
+# f1 <- doe_write_raster(geo2, "results/filtered/BradyDesert_Markers")
 
+####################### END ######################
+
+### Don't run!!!
 # ace_stack <- stack("results/filtered/ace_stack")
 # cem_stack <- stack("results/filtered/cem_stack")
 # mf_stack <- stack("results/filtered/mf_stack")

@@ -157,10 +157,8 @@ select_largest_threshold <- function(x, ignore_black=TRUE, test_all=TRUE) {
   return(r)
 }
 
-plot_threshold <- function(x,
-                           threshold,
-                           e = NULL,
-                           print_plot = FALSE) {
+
+plot_threshold <- function(x, threshold, e = NULL, print_plot = FALSE) {
   if (!is.null(e)) {
     x <- raster::crop(x, e)
   }
@@ -174,6 +172,7 @@ plot_threshold <- function(x,
   }
   return(top_x)
 }
+
 
 raster_filter <- function(x, center_point, threshold, e = NULL) {
   threshold <- abs(threshold)
@@ -194,6 +193,7 @@ raster_sum <- function(x) {
   r <- raster::stackApply(x, indices = idx, fun = sum,na.rm = TRUE)
   return(r)
 }
+
 
 raster_euclidean_collapse <- function(x) {
   x <- x*x
