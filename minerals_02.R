@@ -4,7 +4,7 @@ minerals_directory <- "../../doe_test/HyMapTargetDetectionFull"
 band_names <- c("OpalizedTuff", "KrattOpal", "Epsomite", "Gypsum", 
                 "Hematite", "Kaolinite", "Chalcedony")
 target_list <- c("Chalcedony", "OpalizedTuff", "Kaolinite", "Gypsum", 
-                 "Hematite", "Epsomite", "KrattOpal")
+                 "Hematite", "Epsomite") #, "KrattOpal")
 target_list2 <- c("Chalcedony", "Kaolinite", "Gypsum", 
                  "Hematite", "Epsomite")
 
@@ -15,28 +15,44 @@ input_files <- c("HyMap_full_ace", "HyMap_full_cem", "HyMap_full_mf",
 all_stacks <- vector(mode="list", length = 0)
 for (file_name in input_files){
   s <- stack(file.path(minerals_directory, file_name))
+  # s <- raster::crop(s, extent_tall_brady)
   # s <- raster::crop(s, extent_desert)
   names(s) <- band_names
   s <- s[[target_list]]
   n <- is.na(s)
-  s[is.na(s)] <- 0
-  s <- raster::setMinMax(s)
+  s[n] <- 0
   #### if it's the output of the SAM algorithm, adjust results
   if(grepl("_sam", file_name, fixed = TRUE)){
     cat(paste0(file_name, " is SAM\n"))
     s <- abs(s-1)
-    s[s>1]  <- NA
+    s[s>1]  <- 1
     s <- 1-s
   } else {
     cat(paste0(file_name, " is not SAM\n"))
   }
   ### Apply min-max normalization
-  s_min <- raster::cellStats(s, min)
-  s_max <- raster::cellStats(s, max)
-  s <- (s-s_min)/s_max
+  cat("Applying min-max normalization... ")
+  # g <- raster::getValues(s)
+  s[s<=0] <- NA
+  s_min <- min(raster::cellStats(s, "min"))
+  s_max <- max(raster::cellStats(s, "max"))
+  # s_min <- min(raster::getValues(s))
+  # s_max <- max(raster::getValues(s))
+  # ss <- summary(s)
+  # s_min <- min(ss)
+  # s_max <- max(ss)
+  s_range <- s_max-s_min
+  cat(paste0("min: ", s_min, "; max: ", s_max))
+  # rm(g)
+  s <- (s-s_min)/s_range
   s[n] <- NA
   names(s) <- target_list
+  cat(" ; Setting new min-max... ")
+  s <- raster::setMinMax(s)
+  cat("Appending results...\n")
+  print(s)
   all_stacks <- append(all_stacks, s)
+  rm(s)
 }
 
 # chalcedony <- stack()
@@ -74,7 +90,7 @@ geo_m <- as.matrix(hydrothermal2)*1000
 mode(geo_m) <- "integer"
 geo<-autothresholdr::auto_thresh(geo_m, method = "Otsu",
                                  ignore_black = TRUE, ignore_na = TRUE)
-geo/1000.0
+print(as.numeric(geo/1000.0))
 
 sigmoid_normalizer <- function(x){
   x_mean <- raster::cellStats(x, stat=mean)
@@ -95,6 +111,7 @@ geo2 <- unit_normalization(geo2)
 plot(geo2, main="Geothermal alterations after normalization and thresholding", col=rev(heat.colors(100)))
 
 # f1 <- doe_write_raster(geo2, "results/filtered/BradyDesert_Markers")
+f1 <- doe_write_raster(minerals_stack, "results/filtered/Minerals_Stack")
 
 ####################### END ######################
 
@@ -110,3 +127,17 @@ plot(geo2, main="Geothermal alterations after normalization and thresholding", c
 # chalcedony <- calc(chalcedony, sum, na.rm = TRUE)
 # 
 # f1 <- doe_write_raster(chalcedony, "results/filtered/Brady_Chalcedony")
+
+minerals_vector <- vector(mode = "list", length = 0)
+for (mineral_name in target_list){
+  m <- stack()
+  for (i in 1:length(all_stacks)){
+    m_i <- all_stacks[[i]][[mineral_name]]
+    detection_method <- strsplit(input_files[i], "_")[[1]]
+    detection_method <- detection_method[[min(3, length(detection_method))]]
+    names(m_i) <- paste0(mineral_name,"_", detection_method)
+    m <- stack(m, m_i)
+  }
+  # names(m) <- mineral_name
+  minerals_vector <- append(minerals_vector, m)
+}
