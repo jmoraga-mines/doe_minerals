@@ -140,4 +140,14 @@ for (mineral_name in target_list){
   }
   # names(m) <- mineral_name
   minerals_vector <- append(minerals_vector, m)
+  cat("Saving: ", mineral_name, "... Full ... ")
+  f1 <- doe_write_raster(m, paste0("results/filtered/All_", mineral_name))
+  cat("Brady ... ")
+  b <- crop(m, extent_tall_brady)
+  f1 <- doe_write_raster(b, paste0("results/filtered/Brady_", mineral_name))
+  cat("Desert Peak ...\n")
+  d <- crop(m, extent_desert)
+  f1 <- doe_write_raster(b, paste0("results/filtered/Desert_", mineral_name))
+  rm(m, b, d, f1)
 }
+minerals_vector
