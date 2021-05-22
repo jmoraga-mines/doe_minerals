@@ -48,7 +48,7 @@ extent_hymap <- raster::raster(
 )
 ### END  # Defining geographical extent from Areas of Interest ----------------
 
-
+#### Start function definitions                                           #####
 
 doe_write_raster <- function(x,
                              filename,

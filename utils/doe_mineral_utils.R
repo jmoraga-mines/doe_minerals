@@ -2,7 +2,7 @@ if (!require("pacman")) {
   installed.packages("pacman")
   library("pacman")
 }
-pacman::p_load(raster, rgdal, sp, rgeos)
+pacman::p_load(raster, rgdal, sp, rgeos, sf)
 pacman::p_load(autothresholdr, igraph)
 pacman::p_load(latticeExtra)
 
@@ -69,9 +69,8 @@ doe_write_raster <- function(x,
 }
 
 
-test_all_thresholds <- function(x, ignore_black=TRUE) {
-  x <- as.matrix(x) * 1000
-  mode(x) <- "integer"
+test_all_thresholds <- function(x, ignore_black=TRUE, ignore_white=FALSE) {
+  x <- as.integer(as.matrix(x) * 1000)
   the_good_methods <- c(
     "IJDefault",
     "Intermodes",
@@ -81,36 +80,55 @@ test_all_thresholds <- function(x, ignore_black=TRUE) {
     "Otsu",
     "RenyiEntropy"
   )
+  all_methods <- c(
+    "IJDefault",
+    "Huang",
+    "Huang2",
+    "Intermodes",
+    "IsoData",
+    "Li",
+    "MaxEntropy",
+    "Mean",
+    "MinErrorI",
+    "Minimum",
+    "Moments",
+    "Otsu",
+    "Percentile",
+    "RenyiEntropy",
+    "Shanbhag",
+    "Triangle", 
+    "Yen"
+  )
   r <- vector(mode = "list", length = 0)
-  for (th_method in the_good_methods) {
+  for (th_method in all_methods) {
     b_t <- tryCatch(
       {
-        autothresholdr::auto_thresh(b, method = th_method,
+        autothresholdr::auto_thresh(x, method = th_method,
                                     ignore_black = ignore_black,
+                                    ignore_white = ignore_white,
                                     ignore_na = TRUE)
-      }, error=function(cond){return(-1)}, 
-      warning=function(cond){return(-1)}
+      }, error=function(cond){cat("\n"); return(NA)}, 
+      warning=function(cond){cat("\n"); return(NA)}
     )
     r[th_method] <- (as.numeric(b_t) / 1000.0)
-    print(paste(
+    cat(paste(
       "Method:",
       th_method,
       "; threshold = ",
-      as.numeric(b_t) / 1000.0
+      as.numeric(b_t) / 1000.0,
+      "\n"
     ))
   }
-  return(r)
+  return(unlist(r))
 }
 
 
-select_largest_threshold <- function(x, ignore_black=TRUE, test_all=TRUE) {
-  x <- as.matrix(x) * 1000
-  mode(x) <- "integer"
+select_largest_threshold <- function(x, ignore_black=TRUE, test_all=FALSE, ignore_white=FALSE) {
+  x <- as.integer(as.matrix(x) * 1000)
   the_good_methods <- c(
     "IJDefault",
     "Intermodes",
     "IsoData",
-    "Minimum",
     "Moments",
     "RenyiEntropy",
     "Otsu"
@@ -139,14 +157,15 @@ select_largest_threshold <- function(x, ignore_black=TRUE, test_all=TRUE) {
     test_methods = all_methods
   } else
     test_methods = the_good_methods
-  for (th_method in the_good_methods) {
+  for (th_method in test_methods) {
     b_t <- tryCatch(
       {
-        autothresholdr::auto_thresh(b, method = th_method,
+        autothresholdr::auto_thresh(x, method = th_method,
                                     ignore_black = ignore_black,
+                                    ignore_white = ignore_white,
                                     ignore_na = TRUE)
-      }, error=function(cond){return(-1)}, 
-      warning=function(cond){return(-1)}
+      }, error=function(cond){cat("\n"); return(NA)}, 
+      warning=function(cond){cat("\n"); return(NA)}
     )
     test_th <- (as.numeric(b_t)/ 1000.0)
     if(test_th > r$th) {
@@ -242,11 +261,35 @@ stack2matrix <- function(x, layer_name) {
 #' names      : layer 
 #' values     : 0, 1  (min, max)
 unit_normalization <- function(x) {
-  x[x==0] <- NA
-  x_min <- raster::minValue(x)
-  x_max <- raster::maxValue(x)
+  # x[x==0] <- NA
+  the_names <- names(x)
+  x_min <- raster::minValue(x) # vector with min for all layers
+  x_max <- raster::maxValue(x) # vector with max for all layers
   x_span <- x_max-x_min
   x <- (x-x_min)/x_span
+  names(x) <- the_names
+  return(x)
+}
+
+minmax_normalization <- function(x) {
+  # x[x==0] <- NA
+  the_names <- names(x)
+  # Obtain global minimum and maximum
+  x_min <- min(raster::cellStats(x, stat = 'min', rm.na = TRUE, asSample= FALSE))
+  x_max <- max(raster::cellStats(x, stat = 'max', rm.na = TRUE, asSample= FALSE))
+  x_span <- x_max-x_min
+  x <- (x-x_min)/x_span
+  names(x) <- the_names
+  return(x)
+}
+
+
+sigmoid_normalizer <- function(x, sigmas = 2){
+  the_names <- names(x)
+  x_mean <- raster::cellStats(x, stat=mean, na.rm=TRUE, asSample=FALSE)
+  x_std <-  raster::cellStats(x, stat=sd, na.rm=TRUE, asSample=FALSE)
+  x <- 1/(1+exp((x_mean-x)/(sigmas*x_std)))
+  names(x) <- the_names
   return(x)
 }
 
@@ -265,10 +308,34 @@ unit_normalization <- function(x) {
 #' @examples
 #' n_sam <- sam_normalize(sam_raster)
 #' 
-sam_normalize <- function(x) {
-  x <- abs(x - 1)
+sam_normalize <- function(x, zero2na = FALSE) {
+  if (zero2na)
+    x[x==0] <- NA
+  x <- abs(x - pi/2)/pi
+  x <- raster::setMinMax(x)
   x <- unit_normalization(x)
-  x <- 1 - x
+  return(x)
+}
+
+
+#' Normalizes a non-SAM raster to a number between 0-1, where 1 is better
+#' To compare against other methods, this function converts values to 
+#' absolute low numbers and normalizes values to the range 0-1
+#' where a 1 is perfect match and 0 is no match.
+#' 
+#' @param x Raster. A raster with the results of the SAM analysis
+#'
+#' @return Raster. A normalized raster
+#'
+#' @examples
+#' n_sam <- nonsam_normalize(sam_raster)
+#' 
+nonsam_normalize <- function(x, zero2na = FALSE) {
+  if (zero2na)
+    x[x==0] <- NA
+  x <- abs(x)
+  x <- raster::setMinMax(x)
+  x <- unit_normalization(x)
   return(x)
 }
 
