@@ -151,7 +151,7 @@ all_stacks <- read_TargetDetection(full_base_name, selected_methods,
 ###############################################################################
 ### Step 2 - 
 ###############################################################################
-################ Create Baseline for Analysis and Validation #################
+#### START  ##### Create Baseline for Analysis and Validation #################
 # Create results directory if it does not exist
 if (!dir.exists("results/baseline"))
   dir.create("results/baseline", showWarnings = FALSE, 
@@ -243,6 +243,7 @@ rm(f1)
 #  names(a) <- band_names
 #  all_stacks[[i]] <- a[[target_list]]
 #}
+#### END    ##### Create Baseline for Analysis and Validation #################
 
 cat("Collating minerals\n")
 minerals_stack <- stack()
@@ -293,6 +294,36 @@ plot(geo2, main="Geothermal alterations after normalization and thresholding", c
 f1 <- doe_write_raster(minerals_stack, "results/filtered/Minerals_Stack")
 rm(f1)
 ####################### END ######################
+
+##### Load and run basic hydrothermal thresholds ####
+##### Using top 2.5% and Otsu for thresholding
+source("utils/doe_mineral_utils.R")
+minerals_baseline <- stack("results/baseline/All_minerals_baseline")
+hydrothermal_baseline <- minerals_baseline[[c("Chalcedony", "Kaolinite")]] # Only keeps Chalcedony and Kaolinite
+brady_hydro_baseline <- crop(hydrothermal_baseline, extent_tall_brady)
+brady_hydro_baseline <- calc(brady_hydro_baseline, fun=sum)
+plot(brady_hydro_baseline, main="Collapsed mineral detection")
+total_points <- brady_hydro_baseline@nrows*brady_hydro_baseline@ncols
+top_points <- (2.5/100)*total_points
+threshold_01 <- sort(brady_hydro_baseline[], decreasing = TRUE)[top_points]
+brady_th01 <- brady_hydro_baseline
+brady_th01[brady_hydro_baseline<threshold_01] <- 0
+plot(brady_th02, main="Collapsed mineral detection (th01)")
+brady_th01_despeckle <- focal(brady_th01, w=matrix(c(1,1,1,1,1,1,1,1,1), nrow=3), median, na.rm=T)
+brady_th01_despeckle[brady_th01_despeckle<=0] <- NA
+brady_th01_despeckle <- unit_normalization(brady_th01_despeckle)
+plot(brady_th01_despeckle, main="Collapsed mineral detection (th01 despeckled 3x3 Queen)")
+brady_th01_count <- sum((brady_th01_despeckle>=0)[], na.rm=TRUE)
+threshold_02 <- as.numeric(autothresholdr::auto_thresh(as.integer(as.matrix(brady_hydro_baseline)*1000),
+                                                       method = 'Otsu')/1000.0)
+brady_th02 <- brady_hydro_baseline
+brady_th02[brady_hydro_baseline<threshold_02] <- 0
+plot(brady_th02, main="Collapsed mineral detection (th02:Otsu)")
+brady_th02_despeckle <- focal(brady_th02, w=matrix(c(1,1,1,1,1,1,1,1,1), nrow=3), median, na.rm=T)
+brady_th02_despeckle[brady_th02_despeckle<=0] <- NA
+brady_th02_despeckle <- unit_normalization(brady_th02_despeckle)
+plot(brady_th02_despeckle, main="Collapsed mineral detection (th02 despeckled 3x3 Queen)")
+brady_th02_count <- sum((brady_th02_despeckle>=0)[], na.rm=TRUE)
 
 ### Don't run!!!
 # ace_stack <- stack("results/filtered/ace_stack")
