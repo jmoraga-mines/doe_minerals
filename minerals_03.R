@@ -334,7 +334,13 @@ plot(crop(bth02, extent_tall_brady), main="Clean mineral detection (th02 - brady
 plot(crop(bth01, extent_desert), main="Clean mineral detection (th01 - Desert Peak only)")
 plot(crop(bth02, extent_desert), main="Clean mineral detection (th02 - Desert Peak only)")
 
-
+# Create despeckle results directory if it does not exist
+if (!dir.exists("results/despeckle"))
+  dir.create("results/despeckle", showWarnings = FALSE, 
+             recursive = TRUE, mode = "0775")
+f1 <- doe_write_raster(brady_th01_despeckle, "results/despeckle/HyMap_Minerals_025_despeckled")
+f1 <- doe_write_raster(brady_th02_despeckle, "results/despeckle/HyMap_Minerals_Otsu_despeckled")
+rm(f1) # Force file buffer flush
 
 ### Don't run!!!
 # ace_stack <- stack("results/filtered/ace_stack")
