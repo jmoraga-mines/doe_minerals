@@ -299,16 +299,18 @@ rm(f1)
 ##### Using top 2.5% and Otsu for thresholding
 source("utils/doe_mineral_utils.R")
 minerals_baseline <- stack("results/baseline/All_minerals_baseline")
+hydrothermal_baseline <- minerals_baseline
+brady_hydro_baseline <- minerals_baseline
 hydrothermal_baseline <- minerals_baseline[[c("Chalcedony", "Kaolinite")]] # Only keeps Chalcedony and Kaolinite
 brady_hydro_baseline <- crop(hydrothermal_baseline, extent_tall_brady)
 brady_hydro_baseline <- calc(brady_hydro_baseline, fun=sum)
 plot(brady_hydro_baseline, main="Collapsed mineral detection")
 total_points <- brady_hydro_baseline@nrows*brady_hydro_baseline@ncols
-top_points <- (2.5/100)*total_points
+top_points <- (2.5/100)*total_points    # top 2.5% of the points
 threshold_01 <- sort(brady_hydro_baseline[], decreasing = TRUE)[top_points]
 brady_th01 <- brady_hydro_baseline
 brady_th01[brady_hydro_baseline<threshold_01] <- 0
-plot(brady_th02, main="Collapsed mineral detection (th01)")
+plot(brady_th01, main="Collapsed mineral detection (th01)")
 brady_th01_despeckle <- focal(brady_th01, w=matrix(c(1,1,1,1,1,1,1,1,1), nrow=3), median, na.rm=T)
 brady_th01_despeckle[brady_th01_despeckle<=0] <- NA
 brady_th01_despeckle <- unit_normalization(brady_th01_despeckle)
@@ -324,6 +326,15 @@ brady_th02_despeckle[brady_th02_despeckle<=0] <- NA
 brady_th02_despeckle <- unit_normalization(brady_th02_despeckle)
 plot(brady_th02_despeckle, main="Collapsed mineral detection (th02 despeckled 3x3 Queen)")
 brady_th02_count <- sum((brady_th02_despeckle>=0)[], na.rm=TRUE)
+
+bth01 <- brady_th01_despeckle*(brady_hydro_baseline>0)
+bth02 <- brady_th02_despeckle*(brady_hydro_baseline>0)
+plot(crop(bth01, extent_tall_brady), main="Clean mineral detection (th01 - brady only)")
+plot(crop(bth02, extent_tall_brady), main="Clean mineral detection (th02 - brady only)")
+plot(crop(bth01, extent_desert), main="Clean mineral detection (th01 - Desert Peak only)")
+plot(crop(bth02, extent_desert), main="Clean mineral detection (th02 - Desert Peak only)")
+
+
 
 ### Don't run!!!
 # ace_stack <- stack("results/filtered/ace_stack")
