@@ -124,7 +124,7 @@ test_all_thresholds <- function(x, ignore_black=TRUE, ignore_white=FALSE) {
 
 
 select_largest_threshold <- function(x, ignore_black=TRUE, test_all=FALSE, ignore_white=FALSE) {
-  x <- as.integer(as.matrix(x) * 1000)
+  x <- round(as.matrix(x) * 1000, digits = 0)
   the_good_methods <- c(
     "IJDefault",
     "Intermodes",
@@ -396,6 +396,7 @@ full_detection <- function(base_dir, file_name, band_names,
   print(detection_stack)
   print("Checking thresholds for each layer")
   names(detection_stack) <- target_list
+  b_t <- 0
   for (n in names(detection_stack)) {
     print(paste0("Layer: ", n))
     aLayer <- detection_stack[[n]]
@@ -419,3 +420,4 @@ full_detection <- function(base_dir, file_name, band_names,
   }
   return(detection_stack)
 }
+

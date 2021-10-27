@@ -2,7 +2,7 @@ if(!require("pacman")){
   install.packages("pacman")
   require("pacman")
 }
-pacman::p_load(raster, rgdal)
+pacman::p_load(raster, rgdal, ggplot2)
 
 source("utils/doe_mineral_utils.R")
 
@@ -218,7 +218,7 @@ quantile(fusion_mf_brady, probs=seq(0,1,0.2), na.rm=TRUE)
 
 ##### Gather all fused results
 
-brady_files <- list.files(path = "d:/mineral_markers_manuscript/fusion/brady", 
+brady_files <- list.files(path = "../../../mineral_markers_manuscript/fusion/brady", 
                           pattern = ".gri$", full.names = TRUE)
 brady_stack <- stack(brady_files)
 doe_write_raster(brady_stack, "d:/mineral_markers_manuscript/fusion/brady_fusion_all")
@@ -346,3 +346,24 @@ h <- fuse_layers("d:/mineral_markers_manuscript/fusion/hymap",
                  "d:/mineral_markers_manuscript/fusion", "hymap_fusion")
 spplot(h)
 
+#####################################
+### Histogram printing test
+#####################################
+brady_files <- list.files(path = "../../../mineral_markers_manuscript/fusion/brady", 
+                          pattern = ".gri$", full.names = TRUE)
+brady_stack <- stack(brady_files)
+
+d <- values(brady_stack[[1]])
+d <- d[!is.na(d)]
+d<- d[d>0]
+length(d)
+# p <- qplot(d, data=d, geom="histogram")
+hist(d, main="Histogram of Chalcedony values")
+d <- brady_stack[["sam_fusion"]]
+n <- names(d)
+png(paste0("../../../mineral_markers_manuscript/fusion\ png/", n,"_histogram.png"))
+raster::hist(d, main = paste("Histogram of", n, "values"), 
+             maxpixels = ncell(d), 
+             xlim = c(0,(ceiling(maxValue(d)*10)/10)), 
+             xlab = "Detection value")
+dev.off()

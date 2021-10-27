@@ -125,4 +125,3 @@ raster::setMinMax(cem_stack)
 cem_stack <- unit_normalization(get_stack)
 
 spplot(ace_stack)
-
